@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+        <h4>Image Generator On The Sky</h4>
+        <div>
+        <label> resize with html 100pixel</label>
+        <p>its have a problem on audit chrome (aspect ratio).</p>
+        </div>
+        <img width="100" src="{{url_for('static', filename='coverpyconf.png') }}" />
+{% endblock %}
+
