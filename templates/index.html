@@ -1,4 +1,28 @@
 {% extends 'base.html' %}
 {% block content %}
         <h4>Image Generator On The Sky</h4>
+        <label>
+            Upload Image
+            <input type="file" id="image"/>
+        </label>
+    <script>
+        const inputImage = document.getElementById('image');
+
+        inputImage.addEventListener('change', async (event) => {
+            const {target} = event;
+            const data = new FormData();
+            data.append('file', target.files[0]);
+            try{
+                const result = await fetch('/api/v1/media',{
+                    method: 'POST',
+                    body: data,
+                    headers: {
+                        contentType: 'application/multiform-data',
+                    }
+                });
+            }  catch(e){
+                alert(e.message);
+            }
+        });
+    </script>
 {% endblock %}

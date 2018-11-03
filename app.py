@@ -6,10 +6,13 @@ from flask import (
     redirect,
     url_for,
 )
+
 from flask_restful import Api
 from rest.Media import RestMedia
 from celery import Celery
 from werkzeug.utils import secure_filename
+from PIL import Image
+from resizeimage import resizeimage as reimage
 
 def make_celery(app):
     celery = Celery(
@@ -27,81 +30,40 @@ def make_celery(app):
     celery.Task = ContextTask
     return celery
 
-app = Flask(
-    __name__,
-    static_folder='./uploads'
-)
-
-app.config['UPLOAD_FOLDER'] = './uploads'
-
-app.config.update(
-    CELERY_BROKER_URL='amqp://guest@localhost:5672/',
-    CELERY_RESULT_BACKEND='amqp://guest@localhost:5672/'
-)
+app = Flask(__name__)
+app.config.from_object('settings')
 
 api = Api(app)
+# Todo , Split Celery 
 
 celery = make_celery(app)
 
 @celery.task(name="tasks.image-resize")
-def imageResize(width, filename):
-    
+def imageResize(width, filename, output):
+    img = Image.open(filename)
+    img = reimage.resize_width(img, width)
+    img.save(output, img.format)
+
 @app.route('/')
 def home():
     return render_template('index.html')
 
-@app.route('/problem')
-def problem():
-    return render_template('problem.html')
-
-@app.route('/resolve')
-def resolve():
-    return render_template('resolve.html')
-
 @app.route('/media/<int:width>/<string:imagename>')
 def media(width, imagename):
-    print(width, imagename)
-    return render_template(
-        'index.html'
-    )
-ALLOWED_EXTENSIONS = ['jpeg','jpg','png']
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    originalImage = "./static/{}".format(imagename)
+    outputImage =  "./static/{}/{}".format(width, imagename)
+    imageResize.apply_async((width,imagename, outputImage))
+    # imageResize.delay(width, filename)
+    return redirect(url_for(outputImage))
 
-@app.route('/uploads', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        # check if the post request has the file part
-        if 'file' not in request.files:
-            return redirect(request.url)
-        file = request.files['file']
-        # if user does not select file, browser also
-        # submit a empty part without filename
-        if file.filename == '':
-            return redirect(request.url)
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(
-                app.config['UPLOAD_FOLDER'], filename)
-            )
-            return redirect(
-                    url_for(
-                        'upload_file',
-                        filename=filename
-                    )
-            )
-    return '''
-    <!doctype html>
-    <title>Upload new File</title>
-    <h1>Upload new File</h1>
-    <form method=post enctype=multipart/form-data>
-      <p><input type=file name=file>
-         <input type=submit value=Upload>
-    </form>
-    '''
+"""
+    Register Rest API
+"""
 
 api.add_resource(RestMedia, '/api/v1/media')
 
 if __name__ == '__main__':
-    app.run(debug=True, host="localhost", port=8080)
+    app.run(
+        host = app.config.get('HOST'),
+        port = app.config.get('PORT')
+    )
